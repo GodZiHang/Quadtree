@@ -44,6 +44,11 @@ public:
         query(mRoot.get(), mBox, box, values);
         return values;
     }
+    
+    void effectiveQuery(const Box<Float>& box, T* valuesArr, int& arrSize, int& maxSize)
+    {
+        effectiveQuery(mRoot.get(), mBox, box, valuesArr, arrSize, maxSize);
+    }
 
     std::vector<std::pair<T, T>> findAllIntersections() const
     {
@@ -253,11 +258,18 @@ private:
     {
         assert(node != nullptr);
         assert(queryBox.intersects(box));
-        for (const auto& value : node->values)
-        {
-            if (queryBox.intersects(mGetBox(value)))
+        // if queryBox contains box, join all nodes to vector directly
+        if(queryBox.contains(box)) {
+            for (const auto& value : node->values)
                 values.push_back(value);
+        } else {
+            for (const auto& value : node->values)
+            {
+                if (queryBox.intersects(mGetBox(value)))
+                    values.push_back(value);
+            }
         }
+        
         if (!isLeaf(node))
         {
             for (auto i = std::size_t(0); i < node->children.size(); ++i)
@@ -269,6 +281,50 @@ private:
         }
     }
 
+    // new func
+    void effectiveQuery(Node* node, const Box<Float>& box, const Box<Float>& queryBox, T* valuesArr, int& arrSize, int& maxSize)
+    {
+        assert(node != nullptr);
+        assert(queryBox.intersects(box));
+        if(queryBox.contains(box)) {
+            effectiveQuery_addAllElements(node, valuesArr, arrSize, maxSize);
+            return;
+        } else {
+            for (const auto& value : node->values)
+            {
+                if(queryBox.intersects(mGetBox(value))) {
+                    assert(arrSize < maxSize);
+                    valuesArr[arrSize++] = value;
+                }
+            }
+        }
+
+        if (!isLeaf(node))
+        {
+            for (auto i = std::size_t(0); i < node->children.size(); ++i)
+            {
+                auto childBox = computeBox(box, static_cast<int>(i));
+                if (queryBox.intersects(childBox)) {
+                    effectiveQuery(node->children[i].get(), childBox, queryBox, valuesArr, arrSize, maxSize);
+                }
+            }
+        }
+    }
+
+    // new func
+    void effectiveQuery_addAllElements(Node* node, T* valuesArr, int& arrSize, int& maxSize)
+    {
+        for (const auto& value : node->values)
+            valuesArr[arrSize++] = value;
+        if(!isLeaf(node))
+        {
+            for (auto i = std::size_t(0); i < node->children.size(); ++i)
+            {
+                effectiveQuery_addAllElements(node->children[i].get(), valuesArr, arrSize, maxSize);
+            }
+        }
+    }
+    
     void findAllIntersections(Node* node, std::vector<std::pair<T, T>>& intersections) const
     {
         // Find intersections between values stored in this node
